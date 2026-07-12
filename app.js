@@ -155,7 +155,10 @@ function renderOverview() {
     card.innerHTML =
       (album.cover
         ? `<img class="album-cover" src="${album.cover}" alt="" loading="lazy">`
-        : `<div class="album-cover"></div>`) +
+        : album.coverVideo
+          // no thumbnail file (ffmpeg missing) – the browser renders the first video frame
+          ? `<video class="album-cover" src="${album.coverVideo}#t=0.5" preload="metadata" muted playsinline></video>`
+          : `<div class="album-cover"></div>`) +
       `<div class="album-info"><h2>${album.title}</h2><p>${counts.join(', ') || 'empty'}</p></div>`;
 
     grid.appendChild(card);

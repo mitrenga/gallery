@@ -47,8 +47,17 @@ gallery/               application root (webroot or a webroot subdirectory)
 
 - nginx + PHP-FPM (PHP 8.1+)
 - ImageMagick (`convert`) — photo thumbnails
-- ffmpeg (optional) — video thumbnails; without it the browser renders the
-  first video frame in the grid instead
+- **ffmpeg — required for video thumbnails** (grid, covers, slideshows):
+
+  ```bash
+  sudo apt install ffmpeg
+  ```
+
+  ffmpeg is detected at runtime — no configuration needed, thumbnails start
+  generating as soon as it is installed. Without it the gallery still works,
+  but video previews fall back to the browser rendering the first frame of
+  each video, which is slower (metadata + part of the video is downloaded
+  for every preview).
 
 ## Configuration — config.json
 

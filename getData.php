@@ -99,6 +99,7 @@ function mediaFiles(string $dir, array $imgExt, array $vidExt): array {
 }
 
 if ($action === 'albums') {
+    $hasFfmpeg = trim(shell_exec('command -v ffmpeg') ?? '') !== '';
     $albums = [];
     foreach (scandir($SRC) as $d) {
         if ($d[0] === '.' || !is_dir("$SRC/$d")) continue;
@@ -114,6 +115,7 @@ if ($action === 'albums') {
         $files = mediaFiles($dir, $IMG_EXT, $VID_EXT);
         $photos = $videos = 0;
         $cover = null;
+        $coverVideo = null;   // fallback: the browser renders the first video frame itself
         foreach ($files as $f) {
             $ext = strtolower(pathinfo($f, PATHINFO_EXTENSION));
             $isImg = in_array($ext, $IMG_EXT);
@@ -121,17 +123,24 @@ if ($action === 'albums') {
             if ($cover === null) {
                 $thumbRel = "thumbs/$d/$f.jpg";
                 $thumbAbs = "$ROOT/$thumbRel";
-                if ($isImg) {   // generate the cover; for videos only use it if it already exists
-                    @mkdir("$THUMBS/$d", 0775, true);
+                @mkdir("$THUMBS/$d", 0775, true);
+                if ($isImg) {
                     if (!is_file($thumbAbs) || filemtime($thumbAbs) < filemtime("$dir/$f")) {
                         makeImageThumb("$dir/$f", $thumbAbs, $THUMB_SIZE);
                     }
+                } elseif ($hasFfmpeg) {
+                    if (!is_file($thumbAbs) || filemtime($thumbAbs) < filemtime("$dir/$f")) {
+                        makeVideoThumb("$dir/$f", $thumbAbs, $THUMB_SIZE);
+                    }
                 }
                 if (is_file($thumbAbs)) $cover = $thumbRel;
+                elseif (!$isImg && $coverVideo === null) $coverVideo = "gallery/$d/$f";
             }
         }
 
-        $albums[] = ['id' => $d, 'title' => $title, 'photos' => $photos, 'videos' => $videos, 'cover' => $cover];
+        $album = ['id' => $d, 'title' => $title, 'photos' => $photos, 'videos' => $videos, 'cover' => $cover];
+        if ($cover === null && $coverVideo !== null) $album['coverVideo'] = $coverVideo;
+        $albums[] = $album;
     }
     echo json_encode(['albums' => $albums]);
     exit;
