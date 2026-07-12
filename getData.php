@@ -30,7 +30,11 @@ $user = resolveAuthUser($config);
 $authenticated = $user !== null;
 
 if ($action === 'whoami') {
-    echo json_encode(['auth' => $authenticated, 'user' => $_SESSION['user'] ?? null]);
+    echo json_encode([
+        'auth' => $authenticated,
+        'user' => $_SESSION['user'] ?? null,
+        'title' => $config['title'] ?? null,   // gallery name from config.json
+    ]);
     exit;
 }
 

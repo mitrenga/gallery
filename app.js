@@ -3,6 +3,7 @@
 // contents on demand), navigation via hash (#album=001).
 
 let DATA = null;
+let GALLERY_TITLE = 'Gallery';   // overridden by "title" from config.json (via whoami)
 
 const content = document.getElementById('content');
 const breadcrumb = document.getElementById('breadcrumb');
@@ -20,6 +21,11 @@ async function init() {
   try {
     // authentication check – allowed IPs pass automatically
     const who = await fetchJson('getData.php?action=whoami');
+    if (who.title) {
+      GALLERY_TITLE = who.title;
+      pageTitle.textContent = GALLERY_TITLE;   // visible already on the login screen
+      document.title = GALLERY_TITLE;
+    }
     if (!who.auth) {
       showLogin();
       return;
@@ -130,9 +136,9 @@ function render() {
 
 // ---- album overview ----
 function renderOverview() {
-  pageTitle.textContent = 'Gallery';
+  pageTitle.textContent = GALLERY_TITLE;
   breadcrumb.innerHTML = '';
-  document.title = 'Gallery';
+  document.title = GALLERY_TITLE;
 
   const grid = document.createElement('div');
   grid.className = 'album-grid';
@@ -171,7 +177,7 @@ function renderOverview() {
 function renderAlbum(album) {
   pageTitle.textContent = album.title;
   breadcrumb.innerHTML = '';
-  document.title = album.title + ' – Gallery';
+  document.title = album.title + ' – ' + GALLERY_TITLE;
 
   if (!album.loaded) {
     content.innerHTML = '<p class="loading">Loading album contents…</p>';

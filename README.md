@@ -61,6 +61,7 @@ cp config.json.sample config.json
 
 ```json
 {
+  "title": "My Gallery",
   "users": [
     { "user": "name", "password": "password" }
   ],
@@ -68,6 +69,8 @@ cp config.json.sample config.json
 }
 ```
 
+- `title` — gallery name shown in the page header and browser tab
+  (defaults to "Gallery" when omitted)
 - `users` — who can sign in with username and password
 - `autoLoginIps` — IP addresses (single or CIDR) that are signed in
   automatically without the login dialog

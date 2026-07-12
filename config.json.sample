@@ -1,4 +1,5 @@
 {
+  "title": "My Gallery",
   "users": [
     { "user": "name", "password": "change-me" }
   ],
