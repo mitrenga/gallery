@@ -1,0 +1,437 @@
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg: #14161a;
+  --card: #1e2128;
+  --text: #e8e8ea;
+  --muted: #9aa0aa;
+  --accent: #4da3ff;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: system-ui, -apple-system, sans-serif;
+  min-height: 100vh;
+}
+
+header {
+  padding: 20px 28px 12px;
+  display: flex;
+  align-items: baseline;
+  gap: 18px;
+  flex-wrap: wrap;
+}
+
+h1 { font-size: 1.5rem; font-weight: 600; }
+
+#breadcrumb a {
+  color: var(--accent);
+  text-decoration: none;
+}
+#breadcrumb a:hover { text-decoration: underline; }
+
+#logout {
+  position: fixed;
+  top: 14px;
+  right: 14px;
+  z-index: 150;   /* above album buttons, below the lightbox */
+  background: rgba(255,255,255,.12);
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  border-radius: 50%;
+  width: 46px;
+  height: 46px;
+  font-size: 1.2rem;
+  transition: background .15s, color .15s;
+}
+#logout:hover { background: rgba(255,255,255,.25); color: var(--text); }
+
+/* album controls shift left while the logout button is visible */
+body.has-logout .an-close   { right: 72px; }
+body.has-logout .an-shuffle { right: 130px; }
+body.has-logout .an-play    { right: 188px; }
+
+#fs-toggle {
+  position: fixed;
+  right: 14px;
+  bottom: 14px;
+  z-index: 300;   /* above the lightbox and album buttons */
+  background: rgba(255,255,255,.12);
+  border: none;
+  color: var(--text);
+  cursor: pointer;
+  border-radius: 50%;
+  width: 46px;
+  height: 46px;
+  font-size: 1.1rem;
+  transition: background .15s;
+}
+#fs-toggle:hover { background: rgba(255,255,255,.25); }
+#fs-toggle.active { background: rgba(255,255,255,.3); }  /* fullscreen is on */
+
+main { padding: 12px 28px 40px; }
+
+.loading { color: var(--muted); }
+
+/* ---- login dialog ---- */
+#login {
+  position: fixed;
+  inset: 0;
+  background: var(--bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 400;
+}
+
+.login-box {
+  background: var(--card);
+  border-radius: 14px;
+  padding: 32px 36px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 280px;
+}
+.login-box h2 { font-size: 1.2rem; margin-bottom: 6px; }
+.login-box input {
+  background: #2a2e37;
+  border: 1px solid #3a3f4a;
+  border-radius: 8px;
+  padding: 10px 12px;
+  color: var(--text);
+  font-size: 1rem;
+}
+.login-box input:focus { outline: 2px solid var(--accent); border-color: transparent; }
+.login-box button {
+  background: var(--accent);
+  border: none;
+  border-radius: 8px;
+  padding: 10px;
+  color: #fff;
+  font-size: 1rem;
+  cursor: pointer;
+  margin-top: 4px;
+}
+.login-box button:hover { filter: brightness(1.15); }
+.login-error { color: #ff7b72; font-size: .85rem; min-height: 1.2em; text-align: center; }
+
+/* ---- album overview ---- */
+.album-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 20px;
+}
+
+.album-card {
+  background: var(--card);
+  border-radius: 12px;
+  overflow: hidden;
+  cursor: pointer;
+  text-decoration: none;
+  color: inherit;
+  transition: transform .15s, box-shadow .15s;
+  display: block;
+}
+.album-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 24px rgba(0,0,0,.4);
+}
+
+.album-cover {
+  aspect-ratio: 4 / 3;
+  width: 100%;
+  object-fit: cover;
+  display: block;
+  background: #2a2e37;
+}
+
+.album-info { padding: 12px 14px; }
+.album-info h2 { font-size: 1.05rem; font-weight: 600; }
+.album-info p { color: var(--muted); font-size: .85rem; margin-top: 3px; }
+
+/* ---- album thumbnail grid ---- */
+.thumb-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 10px;
+  margin: 0 46px;   /* room for the side arrows */
+}
+
+.thumb {
+  position: relative;
+  aspect-ratio: 1 / 1;
+  border-radius: 8px;
+  overflow: hidden;
+  cursor: pointer;
+  background: #2a2e37;
+  display: block;
+}
+
+.thumb.dragging { opacity: .35; }
+.thumb.drag-over { outline: 3px solid var(--accent); outline-offset: -3px; }
+
+.thumb img,
+.thumb video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transition: transform .2s;
+}
+.thumb:hover img,
+.thumb:hover video { transform: scale(1.05); }
+
+/* play icon on videos */
+.thumb.video::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: rgba(0,0,0,.55) url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="white"><path d="M8 5v14l11-7z"/></svg>') center/26px no-repeat;
+  pointer-events: none;
+}
+
+/* ---- lightbox ---- */
+body.no-scroll { overflow: hidden; }
+
+#lightbox {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.92);
+  display: none;
+  z-index: 200;   /* above album buttons (.album-nav, z-index 101) */
+}
+#lightbox.open { display: block; }
+
+.lb-stage {
+  position: absolute;
+  inset: 0;
+  perspective: 1400px;   /* for the 3D flip */
+  overflow: hidden;      /* Ken Burns zoom must not overflow */
+}
+
+.lb-stage img,
+.lb-stage video {
+  position: absolute;    /* two frames stacked during a transition */
+  top: 30px;
+  left: 70px;
+  width: calc(100% - 140px);   /* 70px margin left and right */
+  height: calc(100% - 60px);   /* 30px margin top and bottom */
+  object-fit: contain;   /* scales even smaller photos/videos to the full stage, keeps aspect ratio */
+}
+
+/* ---- transitions between frames ----
+   The old frame vanishes instantly (.15s), the new one enters slower (.45–.5s) –
+   if it has different dimensions, the old frame's protruding edges never distract. */
+.tr-fade-in  { animation: lb-fade-in  .45s ease both; }
+.tr-fade-out { animation: lb-fade-out .15s ease-out both; }
+@keyframes lb-fade-in  { from { opacity: 0; } }
+@keyframes lb-fade-out { to   { opacity: 0; } }
+
+.tr-slide-in  { animation: lb-slide-in  .45s ease both; }
+.tr-slide-out { animation: lb-slide-out .15s ease-out both; }
+.tr-slide-in.tr-rev  { animation-name: lb-slide-in-rev; }
+.tr-slide-out.tr-rev { animation-name: lb-slide-out-rev; }
+@keyframes lb-slide-in      { from { transform: translateX(70%);  opacity: 0; } }
+@keyframes lb-slide-out     { to   { transform: translateX(-70%); opacity: 0; } }
+@keyframes lb-slide-in-rev  { from { transform: translateX(-70%); opacity: 0; } }
+@keyframes lb-slide-out-rev { to   { transform: translateX(70%);  opacity: 0; } }
+
+.tr-zoom-in  { animation: lb-zoom-in  .45s ease both; }
+.tr-zoom-out { animation: lb-zoom-out .15s ease-out both; }
+@keyframes lb-zoom-in  { from { transform: scale(.6);  opacity: 0; } }
+@keyframes lb-zoom-out { to   { transform: scale(1.15); opacity: 0; } }
+
+.tr-flip-in  { animation: lb-flip-in  .5s ease-out both; }
+.tr-flip-out { animation: lb-flip-out .18s ease-in both; }
+.tr-flip-in.tr-rev  { animation-name: lb-flip-in-rev; }
+.tr-flip-out.tr-rev { animation-name: lb-flip-out-rev; }
+@keyframes lb-flip-in      { from { transform: rotateY(85deg);  opacity: 0; } }
+@keyframes lb-flip-out     { to   { transform: rotateY(-85deg); opacity: 0; } }
+@keyframes lb-flip-in-rev  { from { transform: rotateY(-85deg); opacity: 0; } }
+@keyframes lb-flip-out-rev { to   { transform: rotateY(85deg);  opacity: 0; } }
+
+.tr-blur-in  { animation: lb-blur-in  .5s ease both; }
+.tr-blur-out { animation: lb-blur-out .18s ease-out both; }
+@keyframes lb-blur-in  { from { filter: blur(25px); opacity: 0; } }
+@keyframes lb-blur-out { to   { filter: blur(25px); opacity: 0; } }
+
+.tr-wipe-in  { animation: lb-wipe-in .5s ease both; }
+.tr-wipe-out { animation: lb-fade-out .15s ease-out both; }   /* old vanishes right away, new is revealed over black */
+.tr-wipe-in.tr-rev { animation-name: lb-wipe-in-rev; }
+@keyframes lb-wipe-in      { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0); } }
+@keyframes lb-wipe-in-rev  { from { clip-path: inset(0 0 0 100%); } to { clip-path: inset(0); } }
+
+/* additional transitions – the old frame vanishes quickly in all of them */
+.tr-iris-out, .tr-diag-out, .tr-slidev-out, .tr-spin-out,
+.tr-door-out, .tr-fall-out, .tr-stretch-out, .tr-bounce-out {
+  animation: lb-fade-out .15s ease-out both;
+}
+
+/* iris (circular reveal) */
+.tr-iris-in { animation: lb-iris-in .5s ease both; }
+@keyframes lb-iris-in { from { clip-path: circle(0% at 50% 50%); } to { clip-path: circle(75% at 50% 50%); } }
+
+/* diagonal reveal from a corner */
+.tr-diag-in { animation: lb-diag-in .5s ease both; }
+.tr-diag-in.tr-rev { animation-name: lb-diag-in-rev; }
+@keyframes lb-diag-in {
+  from { clip-path: polygon(0 0, 0 0, 0 0); }
+  to   { clip-path: polygon(0 0, 200% 0, 0 200%); }
+}
+@keyframes lb-diag-in-rev {
+  from { clip-path: polygon(100% 100%, 100% 100%, 100% 100%); }
+  to   { clip-path: polygon(100% 100%, -100% 100%, 100% -100%); }
+}
+
+/* vertical slide */
+.tr-slidev-in { animation: lb-slidev-in .45s ease both; }
+.tr-slidev-in.tr-rev { animation-name: lb-slidev-in-rev; }
+@keyframes lb-slidev-in     { from { transform: translateY(70%);  opacity: 0; } }
+@keyframes lb-slidev-in-rev { from { transform: translateY(-70%); opacity: 0; } }
+
+/* spin with zoom */
+.tr-spin-in { animation: lb-spin-in .5s ease both; }
+.tr-spin-in.tr-rev { animation-name: lb-spin-in-rev; }
+@keyframes lb-spin-in     { from { transform: rotate(120deg)  scale(.3); opacity: 0; } }
+@keyframes lb-spin-in-rev { from { transform: rotate(-120deg) scale(.3); opacity: 0; } }
+
+/* 3D door – rotates around an edge */
+.tr-door-in { animation: lb-door-in .55s ease-out both; transform-origin: left center; }
+.tr-door-in.tr-rev { animation-name: lb-door-in-rev; transform-origin: right center; }
+@keyframes lb-door-in     { from { transform: rotateY(-100deg); opacity: 0; } }
+@keyframes lb-door-in-rev { from { transform: rotateY(100deg);  opacity: 0; } }
+
+/* fall from above with settle */
+.tr-fall-in { animation: lb-fall-in .55s cubic-bezier(.22, 1.2, .36, 1) both; }
+@keyframes lb-fall-in { from { transform: translateY(-120%) rotate(-6deg); opacity: 0; } }
+
+/* stretch out of a vertical line */
+.tr-stretch-in { animation: lb-stretch-in .45s ease both; }
+@keyframes lb-stretch-in { from { transform: scaleX(0); opacity: .5; } }
+
+/* zoom with an elastic overshoot */
+.tr-bounce-in { animation: lb-bounce-in .55s cubic-bezier(.34, 1.56, .64, 1) both; }
+@keyframes lb-bounce-in { from { transform: scale(.3); opacity: 0; } }
+
+/* animatable variables for mask-based transitions */
+@property --dot   { syntax: '<percentage>'; inherits: false; initial-value: 0%; }
+@property --blind { syntax: '<percentage>'; inherits: false; initial-value: 0%; }
+
+.tr-checker-out { animation: lb-fade-out .15s ease-out both; }
+
+/* checkerboard dissolve – a grid of growing dots in two interleaved layers */
+.tr-checker-in {
+  -webkit-mask-image:
+    radial-gradient(circle, #000 var(--dot), transparent calc(var(--dot) + 2%)),
+    radial-gradient(circle, #000 var(--dot), transparent calc(var(--dot) + 2%));
+  mask-image:
+    radial-gradient(circle, #000 var(--dot), transparent calc(var(--dot) + 2%)),
+    radial-gradient(circle, #000 var(--dot), transparent calc(var(--dot) + 2%));
+  -webkit-mask-size: 12% 12%;
+  mask-size: 12% 12%;
+  -webkit-mask-position: 0 0, 6% 6%;
+  mask-position: 0 0, 6% 6%;
+  animation: lb-checker-in .6s ease-out both;
+}
+@keyframes lb-checker-in { from { --dot: 0%; } to { --dot: 100%; } }
+
+/* cube – both frames rotate like faces of a cube */
+.tr-cube-in  { animation: lb-cube-in  .6s ease both; transform-origin: 0% 50%; }
+.tr-cube-out { animation: lb-cube-out .6s ease both; transform-origin: 100% 50%; }
+.tr-cube-in.tr-rev  { animation-name: lb-cube-in-rev;  transform-origin: 100% 50%; }
+.tr-cube-out.tr-rev { animation-name: lb-cube-out-rev; transform-origin: 0% 50%; }
+@keyframes lb-cube-in      { from { transform: translateX(100%)  rotateY(90deg); } }
+@keyframes lb-cube-out     { 60% { opacity: 1; } to { transform: translateX(-100%) rotateY(-90deg); opacity: 0; } }
+@keyframes lb-cube-in-rev  { from { transform: translateX(-100%) rotateY(-90deg); } }
+@keyframes lb-cube-out-rev { 60% { opacity: 1; } to { transform: translateX(100%)  rotateY(90deg); opacity: 0; } }
+
+/* blinds – horizontal slats open from the top (rev = from the bottom) */
+.tr-blinds-out { animation: lb-fade-out .15s ease-out both; }
+.tr-blinds-in {
+  -webkit-mask-image: repeating-linear-gradient(to bottom, #000 0 var(--blind), transparent var(--blind) 12.5%);
+  mask-image: repeating-linear-gradient(to bottom, #000 0 var(--blind), transparent var(--blind) 12.5%);
+  animation: lb-blinds-in .55s ease-out both;
+}
+.tr-blinds-in.tr-rev {
+  -webkit-mask-image: repeating-linear-gradient(to top, #000 0 var(--blind), transparent var(--blind) 12.5%);
+  mask-image: repeating-linear-gradient(to top, #000 0 var(--blind), transparent var(--blind) 12.5%);
+}
+@keyframes lb-blinds-in { from { --blind: 0%; } to { --blind: 12.5%; } }
+
+/* vertical blinds – slats open from the left (rev = from the right) */
+.tr-blindsv-out { animation: lb-fade-out .15s ease-out both; }
+.tr-blindsv-in {
+  -webkit-mask-image: repeating-linear-gradient(to right, #000 0 var(--blind), transparent var(--blind) 12.5%);
+  mask-image: repeating-linear-gradient(to right, #000 0 var(--blind), transparent var(--blind) 12.5%);
+  animation: lb-blinds-in .55s ease-out both;
+}
+.tr-blindsv-in.tr-rev {
+  -webkit-mask-image: repeating-linear-gradient(to left, #000 0 var(--blind), transparent var(--blind) 12.5%);
+  mask-image: repeating-linear-gradient(to left, #000 0 var(--blind), transparent var(--blind) 12.5%);
+}
+
+/* Ken Burns – slow photo drift during the slideshow.
+   All variants start at rest (scale 1) so nothing jumps after the transition. */
+.kb-1 { animation: kb-zoom    6.5s linear both; }
+.kb-2 { animation: kb-drift-l 6.5s linear both; }
+.kb-3 { animation: kb-drift-r 6.5s linear both; }
+.kb-4 { animation: kb-drift-d 6.5s linear both; }
+@keyframes kb-zoom    { to { transform: scale(1.15); } }
+@keyframes kb-drift-l { to { transform: scale(1.12) translateX(-3%); } }
+@keyframes kb-drift-r { to { transform: scale(1.12) translateX(3%);  } }
+@keyframes kb-drift-d { to { transform: scale(1.12) translateY(2.5%); } }
+
+#lightbox button,
+.album-nav button {
+  position: absolute;
+  z-index: 101;
+  background: rgba(255,255,255,.08);
+  border: none;
+  color: #fff;
+  cursor: pointer;
+  border-radius: 50%;
+  width: 46px;
+  height: 46px;
+  font-size: 1.3rem;
+  line-height: 1;
+  transition: background .15s;
+}
+#lightbox button:hover,
+.album-nav button:hover { background: rgba(255,255,255,.22); }
+
+.lb-close { top: 14px; right: 14px; font-size: 1.7rem !important; }
+.lb-prev  { left: 14px;  top: 50%; transform: translateY(-50%); }
+.lb-next  { right: 14px; top: 50%; transform: translateY(-50%); }
+
+/* ---- album navigation (in the album view) ---- */
+.album-nav button {
+  position: fixed;
+  background: rgba(255,255,255,.12);
+}
+.an-close   { top: 14px; right: 14px; font-size: 1.7rem !important; }
+.an-shuffle { top: 14px; right: 72px; font-size: 1.5rem !important; }
+.an-play    { top: 14px; right: 130px; }
+.an-prev    { left: 14px;  top: 50%; transform: translateY(-50%); }
+.an-next    { right: 14px; top: 50%; transform: translateY(-50%); }
+
+.thumb .label {
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  padding: 14px 8px 6px;
+  font-size: .72rem;
+  color: #fff;
+  background: linear-gradient(transparent, rgba(0,0,0,.7));
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  opacity: 0;
+  transition: opacity .15s;
+}
+.thumb:hover .label { opacity: 1; }

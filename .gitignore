@@ -1,0 +1,6 @@
+# gallery media content – not tracked in git
+/gallery/
+/thumbs/
+
+# configuration with passwords and allowed IPs
+/config.json
