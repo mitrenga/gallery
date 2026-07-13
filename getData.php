@@ -94,7 +94,8 @@ if ($action === 'resetRequest') {
 
                 $title = $config['title'] ?? 'Gallery';
                 $subject = '=?UTF-8?B?' . base64_encode("$title – password reset") . '?=';
-                $message = "To set a new password open this link (valid for 1 hour):\n\n$link\n\n"
+                $message = "Your user name: {$usr['user']}\n\n"
+                         . "To set a new password open this link (valid for 1 hour):\n\n$link\n\n"
                          . "If you did not request a password reset, ignore this e-mail.";
                 if (!empty($config['smtp']['host'])) {
                     smtpSend($config['smtp'], $email, $subject, $message);
