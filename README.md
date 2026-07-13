@@ -97,15 +97,27 @@ cp config.json.sample config.json
 {
   "title": "My Gallery",
   "users": [
-    { "user": "name", "password": "password" }
+    { "user": "name", "password": "password", "email": "user@sample.com" }
   ],
+  "smtp": {
+    "host": "smtp.gmail.com",
+    "port": 465,
+    "user": "you@gmail.com",
+    "password": "gmail-app-password",
+    "from": "you@gmail.com"
+  },
   "autoLoginIps": [ "127.0.0.1", "::1", "10.25.0.0/16", "10.25.101.11" ]
 }
 ```
 
 - `title` — gallery name shown in the page header and browser tab
   (defaults to "Gallery" when omitted)
-- `users` — who can sign in with username and password
+- `users` — who can sign in with username and password; the optional `email`
+  enables the "Forgot password?" reset link for that user
+- `smtp` — outgoing mail for password-reset e-mails (implicit TLS + AUTH
+  LOGIN). For Gmail create an *app password* (Google account → Security →
+  2-Step Verification → App passwords) — a normal account password will not
+  work. When the section is missing, PHP `mail()` is used as a fallback.
 - `autoLoginIps` — IP addresses (single or CIDR) that are signed in
   automatically without the login dialog
 - Changes take effect immediately — the config is read on every request and
@@ -113,6 +125,9 @@ cp config.json.sample config.json
   immediate logout)
 - If config.json is missing, authentication is disabled (a safeguard against
   locking yourself out)
+- Password reset rewrites config.json, so the file must be **writable by the
+  web-server user** (e.g. `chgrp www-data config.json`); otherwise resetting
+  fails with HTTP 500 while everything else keeps working
 
 ## API (getData.php)
 
@@ -121,6 +136,8 @@ cp config.json.sample config.json
 | `?action=whoami` | login state (IP auto-login happens here) |
 | `?action=login` | POST `{user, password}` |
 | `?action=logout` | destroy the session |
+| `?action=resetRequest` | POST `{email}` → e-mails a password-reset link (always replies `ok`) |
+| `?action=resetPassword` | POST `{token, password}` → sets a new password, token is single-use |
 | `?action=albums` | album list: id, title, counts, cover |
 | `?action=album&id=X` | album contents, generates missing thumbnails |
 | `?action=saveOrder&id=X` | POST an array of file names → writes `.order.json` |

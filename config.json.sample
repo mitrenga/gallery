@@ -1,8 +1,15 @@
 {
   "title": "My Gallery",
   "users": [
-    { "user": "name", "password": "change-me" }
+    { "user": "name", "password": "change-me", "email": "user@sample.com" }
   ],
+  "smtp": {
+    "host": "smtp.gmail.com",
+    "port": 465,
+    "user": "you@gmail.com",
+    "password": "gmail-app-password",
+    "from": "you@gmail.com"
+  },
   "autoLoginIps": [
     "127.0.0.1",
     "::1",

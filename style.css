@@ -117,6 +117,9 @@ main { padding: 12px 28px 40px; }
 }
 .login-box button:hover { filter: brightness(1.15); }
 .login-error { color: #ff7b72; font-size: .85rem; min-height: 1.2em; text-align: center; }
+.login-error.login-info { color: #7ee787; }   /* confirmation, not an error */
+.login-link { color: var(--muted); font-size: .8rem; text-align: center; text-decoration: none; }
+.login-link:hover { color: var(--text); text-decoration: underline; }
 
 /* ---- album overview ---- */
 .album-grid {

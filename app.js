@@ -26,6 +26,12 @@ async function init() {
       pageTitle.textContent = GALLERY_TITLE;   // visible already on the login screen
       document.title = GALLERY_TITLE;
     }
+    // a password-reset link (?reset=TOKEN) takes precedence over the normal flow
+    const resetToken = new URLSearchParams(location.search).get('reset');
+    if (resetToken) {
+      showReset(resetToken);
+      return;
+    }
     if (!who.auth) {
       showLogin();
       return;
@@ -63,11 +69,17 @@ function showLogin() {
     '<input type="text" name="user" placeholder="Username" autocomplete="username" required>' +
     '<input type="password" name="password" placeholder="Password" autocomplete="current-password" required>' +
     '<button type="submit">Sign in</button>' +
+    '<a href="#" class="login-link">Forgot password?</a>' +
     '<p class="login-error"></p>' +
     '</form>';
   document.body.appendChild(dlg);
   const form = dlg.querySelector('form');
   form.user.focus();
+  dlg.querySelector('.login-link').addEventListener('click', e => {
+    e.preventDefault();
+    dlg.remove();
+    showForgot();
+  });
   form.addEventListener('submit', async e => {
     e.preventDefault();
     const errEl = dlg.querySelector('.login-error');
@@ -85,6 +97,80 @@ function showLogin() {
       errEl.textContent = 'Invalid username or password';
       form.password.value = '';
       form.password.focus();
+    }
+  });
+}
+
+// forgot password – asks for an e-mail and requests a reset link
+function showForgot() {
+  content.innerHTML = '';
+  const dlg = document.createElement('div');
+  dlg.id = 'login';
+  dlg.innerHTML =
+    '<form class="login-box">' +
+    '<h2>Password reset</h2>' +
+    '<input type="email" name="email" placeholder="E-mail" autocomplete="email" required>' +
+    '<button type="submit">Send reset link</button>' +
+    '<a href="#" class="login-link">Back to sign in</a>' +
+    '<p class="login-error"></p>' +
+    '</form>';
+  document.body.appendChild(dlg);
+  const form = dlg.querySelector('form');
+  form.email.focus();
+  dlg.querySelector('.login-link').addEventListener('click', e => {
+    e.preventDefault();
+    dlg.remove();
+    showLogin();
+  });
+  form.addEventListener('submit', async e => {
+    e.preventDefault();
+    const errEl = dlg.querySelector('.login-error');
+    errEl.textContent = '';
+    try {
+      await fetchJson('getData.php?action=resetRequest', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: form.email.value }),
+      });
+      // the server always says ok – it never reveals whether the e-mail exists
+      errEl.classList.add('login-info');
+      errEl.textContent = 'If the e-mail is registered, a reset link has been sent.';
+    } catch (err) {
+      errEl.classList.remove('login-info');
+      errEl.textContent = 'Server error, please try again.';
+    }
+  });
+}
+
+// sets a new password using the token from the e-mailed ?reset=... link
+function showReset(token) {
+  content.innerHTML = '';
+  const dlg = document.createElement('div');
+  dlg.id = 'login';
+  dlg.innerHTML =
+    '<form class="login-box">' +
+    '<h2>New password</h2>' +
+    '<input type="password" name="password" placeholder="New password (min 8 characters)"' +
+    ' autocomplete="new-password" minlength="8" required>' +
+    '<button type="submit">Save password</button>' +
+    '<p class="login-error"></p>' +
+    '</form>';
+  document.body.appendChild(dlg);
+  const form = dlg.querySelector('form');
+  form.password.focus();
+  form.addEventListener('submit', async e => {
+    e.preventDefault();
+    const errEl = dlg.querySelector('.login-error');
+    errEl.textContent = '';
+    try {
+      await fetchJson('getData.php?action=resetPassword', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token, password: form.password.value }),
+      });
+      location.href = location.pathname;   // clean reload -> sign-in with the new password
+    } catch (err) {
+      errEl.textContent = 'The link is invalid or expired.';
     }
   });
 }

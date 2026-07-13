@@ -20,6 +20,11 @@ $VID_EXT = ['mp4', 'webm', 'mov', 'm4v'];
 // users and allowed-IPs configuration (in production the gallery sits in the web root)
 $CONFIG_FILE = __DIR__ . '/config.json';
 
+// short-lived password-reset tokens; kept outside the web root so they can never be
+// downloaded, with an install-specific name so two installs cannot collide
+$RESET_FILE = sys_get_temp_dir() . '/gallery-reset-' . md5(__DIR__) . '.json';
+$RESET_TTL = 3600;   // reset link validity in seconds
+
 $action = $_GET['action'] ?? 'albums';
 
 // ---- authentication (shared logic in authLib.php) ----
@@ -58,6 +63,95 @@ if ($action === 'login') {
 if ($action === 'logout') {
     session_destroy();
     echo json_encode(['auth' => false]);
+    exit;
+}
+
+// POST {email} – e-mails a password-reset link. The response is always the same
+// so it is impossible to probe which e-mail addresses exist.
+if ($action === 'resetRequest') {
+    $body = json_decode(file_get_contents('php://input'), true) ?? [];
+    $email = trim((string)($body['email'] ?? ''));
+
+    $tokens = is_file($RESET_FILE) ? (json_decode(file_get_contents($RESET_FILE), true) ?: []) : [];
+    $now = time();
+    $tokens = array_filter($tokens, fn($t) => $t['expires'] > $now);   // drop expired tokens
+
+    // at most 5 pending requests per IP – a cheap brake on mail spamming
+    $ip = $_SERVER['REMOTE_ADDR'] ?? '';
+    $fromIp = count(array_filter($tokens, fn($t) => ($t['ip'] ?? '') === $ip));
+
+    if ($email !== '' && $fromIp < 5) {
+        foreach (($config['users'] ?? []) as $usr) {
+            if (($usr['email'] ?? '') !== '' && strcasecmp($usr['email'], $email) === 0) {
+                $token = bin2hex(random_bytes(32));
+                $tokens[$token] = ['user' => $usr['user'], 'expires' => $now + $RESET_TTL, 'ip' => $ip];
+
+                // link back to the gallery, derived from the current request
+                $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+                $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
+                $link = $scheme . '://' . $host
+                      . rtrim(dirname($_SERVER['SCRIPT_NAME'] ?? '/'), '/') . "/?reset=$token";
+
+                $title = $config['title'] ?? 'Gallery';
+                $subject = '=?UTF-8?B?' . base64_encode("$title – password reset") . '?=';
+                $message = "To set a new password open this link (valid for 1 hour):\n\n$link\n\n"
+                         . "If you did not request a password reset, ignore this e-mail.";
+                if (!empty($config['smtp']['host'])) {
+                    smtpSend($config['smtp'], $email, $subject, $message);
+                } else {   // fallback: local MTA via mail()
+                    $from = 'gallery@' . preg_replace('/:\d+$/', '', $host);
+                    mail($email, $subject, $message,
+                        "From: $from\r\nContent-Type: text/plain; charset=utf-8");
+                }
+                break;
+            }
+        }
+    }
+
+    file_put_contents($RESET_FILE, json_encode($tokens), LOCK_EX);
+    echo json_encode(['ok' => true]);
+    exit;
+}
+
+// POST {token, password} – sets a new password for the user the token belongs to
+if ($action === 'resetPassword') {
+    $body = json_decode(file_get_contents('php://input'), true) ?? [];
+    $token = (string)($body['token'] ?? '');
+    $password = (string)($body['password'] ?? '');
+
+    $tokens = is_file($RESET_FILE) ? (json_decode(file_get_contents($RESET_FILE), true) ?: []) : [];
+    $entry = $tokens[$token] ?? null;
+    if ($entry === null || $entry['expires'] < time()) {
+        http_response_code(400);
+        echo json_encode(['error' => 'invalid or expired link']);
+        exit;
+    }
+    if (strlen($password) < 8) {
+        http_response_code(400);
+        echo json_encode(['error' => 'password too short (min 8 characters)']);
+        exit;
+    }
+
+    $saved = false;
+    foreach (($config['users'] ?? []) as $i => $usr) {
+        if ($usr['user'] === $entry['user']) {
+            $config['users'][$i]['password'] = $password;
+            $saved = file_put_contents($CONFIG_FILE,
+                json_encode($config, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                LOCK_EX) !== false;
+            break;
+        }
+    }
+
+    unset($tokens[$token]);   // the token is single-use
+    file_put_contents($RESET_FILE, json_encode($tokens), LOCK_EX);
+
+    if (!$saved) {   // user removed from config meanwhile, or config.json is not writable
+        http_response_code(500);
+        echo json_encode(['error' => 'could not save the new password']);
+        exit;
+    }
+    echo json_encode(['ok' => true]);
     exit;
 }
 
@@ -210,6 +304,45 @@ if ($action === 'saveOrder') {
 
 http_response_code(400);
 echo json_encode(['error' => 'unknown action']);
+
+// Minimal SMTP client (implicit TLS + AUTH LOGIN) – works with Gmail using an
+// app password; the "smtp" section of config.json provides host/port/user/password/from.
+function smtpSend(array $smtp, string $to, string $subject, string $body): bool {
+    $host = (string)($smtp['host'] ?? '');
+    $port = (int)($smtp['port'] ?? 465);
+    $from = (string)($smtp['from'] ?? $smtp['user'] ?? '');
+    $fp = @stream_socket_client("ssl://$host:$port", $errno, $errstr, 15);
+    if (!$fp) return false;
+    stream_set_timeout($fp, 15);
+
+    // reads a (possibly multi-line) reply and checks the status code
+    $expect = function (string $code) use ($fp): bool {
+        do { $line = fgets($fp, 1024); } while ($line !== false && isset($line[3]) && $line[3] === '-');
+        return $line !== false && str_starts_with($line, $code);
+    };
+    $send = function (string $cmd, string $code) use ($fp, $expect): bool {
+        fwrite($fp, $cmd . "\r\n");
+        return $expect($code);
+    };
+
+    $body = preg_replace('/\r?\n/', "\r\n", $body);
+    $body = str_replace("\r\n.", "\r\n..", $body);   // SMTP dot-stuffing
+
+    $ok = $expect('220')
+        && $send('EHLO gallery', '250')
+        && $send('AUTH LOGIN', '334')
+        && $send(base64_encode((string)($smtp['user'] ?? '')), '334')
+        && $send(base64_encode((string)($smtp['password'] ?? '')), '235')
+        && $send("MAIL FROM:<$from>", '250')
+        && $send("RCPT TO:<$to>", '250')
+        && $send('DATA', '354')
+        && $send("From: $from\r\nTo: $to\r\nSubject: $subject\r\n"
+               . "MIME-Version: 1.0\r\nContent-Type: text/plain; charset=utf-8\r\n\r\n"
+               . $body . "\r\n.", '250');
+    fwrite($fp, "QUIT\r\n");
+    fclose($fp);
+    return $ok;
+}
 
 function makeImageThumb(string $src, string $dst, int $size): void {
     $cmd = sprintf(
