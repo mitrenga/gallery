@@ -34,6 +34,7 @@ gallery/               application root (webroot or a webroot subdirectory)
 ├── getData.php        API (album list, album contents, login, order saving)
 ├── auth.php           verification endpoint for nginx auth_request
 ├── authLib.php        shared authentication logic (session, IPs, users)
+├── convert-mov.sh     converts .mov videos to browser-friendly .mp4
 ├── config.json        users and allowed IPs (MUST NOT be committed to git!)
 ├── gallery/           albums – each subdirectory = one album
 │   └── 001/
@@ -58,6 +59,30 @@ gallery/               application root (webroot or a webroot subdirectory)
   but video previews fall back to the browser rendering the first frame of
   each video, which is slower (metadata + part of the video is downloaded
   for every preview).
+
+## Converting .mov videos — convert-mov.sh
+
+Browsers play `.mov` files unreliably (Firefox refuses the QuickTime
+container, HEVC from newer iPhones needs hardware decoding). The
+`convert-mov.sh` script converts all `.mov` files in the gallery to
+browser-friendly `.mp4` and **deletes the original on success**:
+
+```bash
+./convert-mov.sh                      # processes ./gallery next to the script
+./convert-mov.sh /path/to/gallery    # or any given directory
+```
+
+What it does:
+
+- `.mov` with **h264** video → lossless container remux (fast); PCM audio from
+  older cameras is converted to AAC so it fits the MP4 container
+- any **other codec** (HEVC, mpeg4, …) → re-encode to H.264 + AAC with
+  `+faststart` for smooth web streaming
+- the original `.mov` is deleted only after a successful conversion; on
+  failure it is kept and the partial `.mp4` is removed
+- renames the entry in the album's `.order.json` (custom ordering survives)
+  and deletes the stale `.mov` thumbnail
+- never overwrites an existing `.mp4` (reports SKIP); handles spaces in names
 
 ## Configuration — config.json
 
