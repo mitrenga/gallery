@@ -21,6 +21,22 @@ function ipMatches(string $ip, array $list): bool {
     return false;
 }
 
+// autoLoginIps entries are either plain strings ("10.0.0.0/16") or objects
+// with permissions ({"ip": "10.0.0.0/16", "rights": ["move"]}); this
+// normalizes both forms to [['ip' => ..., 'rights' => [...]], ...]
+function autoLoginEntries(?array $config): array {
+    $entries = [];
+    foreach (($config['autoLoginIps'] ?? []) as $e) {
+        if (is_string($e)) {
+            $entries[] = ['ip' => $e, 'rights' => []];
+        } elseif (is_array($e) && is_string($e['ip'] ?? null)) {
+            $rights = array_values(array_filter((array)($e['rights'] ?? []), 'is_string'));
+            $entries[] = ['ip' => $e['ip'], 'rights' => $rights];
+        }
+    }
+    return $entries;
+}
+
 // Returns the signed-in user name, or null. The session is re-validated on
 // every request: removing an IP or deleting a user in the config takes effect
 // immediately.
@@ -37,7 +53,7 @@ function resolveAuthUser(?array $config): ?string {
 
     // an auto-login session stays valid only while the IP is in the config
     if ($user !== null && str_starts_with($user, '@ip:')
-            && !ipMatches($clientIp, $config['autoLoginIps'] ?? [])) {
+            && !ipMatches($clientIp, array_column(autoLoginEntries($config), 'ip'))) {
         unset($_SESSION['user']);
         $user = null;
     }
@@ -55,9 +71,32 @@ function resolveAuthUser(?array $config): ?string {
     }
 
     // automatic sign-in by IP
-    if ($user === null && ipMatches($clientIp, $config['autoLoginIps'] ?? [])) {
+    if ($user === null && ipMatches($clientIp, array_column(autoLoginEntries($config), 'ip'))) {
         $_SESSION['user'] = $user = '@ip:' . $clientIp;
     }
 
     return $user;
+}
+
+// Permissions ("rights") of the signed-in user: password users have them on
+// their entry in "users", IP auto-logins on the matching "autoLoginIps"
+// entry. No "rights" key in the config means no permissions.
+function resolveRights(?array $config, ?string $user): array {
+    if ($user === null) return [];
+    if ($config === null) return ['move', 'delete'];   // @noconfig – nothing is locked
+
+    if (str_starts_with($user, '@ip:')) {
+        $ip = substr($user, 4);
+        foreach (autoLoginEntries($config) as $e) {
+            if (ipMatches($ip, [$e['ip']])) return $e['rights'];   // first matching entry wins
+        }
+        return [];
+    }
+
+    foreach (($config['users'] ?? []) as $usr) {
+        if ($usr['user'] === $user) {
+            return array_values(array_filter((array)($usr['rights'] ?? []), 'is_string'));
+        }
+    }
+    return [];
 }

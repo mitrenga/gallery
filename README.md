@@ -19,10 +19,15 @@ everything is read directly from disk, thumbnails are generated on the fly.
 - **All-albums slideshow** — ▶/⚄ on the overview: albums play one after
   another, or are picked randomly (contents always play in order)
 - **Drag & drop ordering** — drag a thumbnail with the mouse; the order is
-  saved on the server
+  saved on the server (requires the `move` permission)
+- **Deleting photos/videos** — × button on a thumbnail removes the file, its
+  thumbnail and the `.order.json` entry (requires the `delete` permission)
 - **Fullscreen** — ⛶ button in the bottom right corner
 - **Login** — allowed IPs sign in automatically, everyone else via
   username + password
+- **Permissions** — `move` and `delete` are granted per user or per
+  auto-login IP in config.json; without a permission the UI hides the action
+  and the server rejects it (HTTP 403)
 
 ## Layout
 
@@ -97,7 +102,8 @@ cp config.json.sample config.json
 {
   "title": "My Gallery",
   "users": [
-    { "user": "name", "password": "password", "email": "user@sample.com" }
+    { "user": "name", "password": "password", "email": "user@sample.com",
+      "rights": ["move", "delete"] }
   ],
   "smtp": {
     "host": "smtp.gmail.com",
@@ -106,7 +112,8 @@ cp config.json.sample config.json
     "password": "gmail-app-password",
     "from": "you@gmail.com"
   },
-  "autoLoginIps": [ "127.0.0.1", "::1", "10.25.0.0/16", "10.25.101.11" ]
+  "autoLoginIps": [ "127.0.0.1", "::1",
+    { "ip": "10.25.0.0/16", "rights": ["move"] } ]
 }
 ```
 
@@ -114,6 +121,12 @@ cp config.json.sample config.json
   (defaults to "Gallery" when omitted)
 - `users` — who can sign in with username and password; the optional `email`
   enables the "Forgot password?" reset link for that user
+- `rights` — permissions for write actions: `move` (drag & drop ordering)
+  and `delete` (removing photos/videos). Without the key the user can only
+  view. IP entries in `autoLoginIps` get permissions by using the object
+  form `{ "ip": ..., "rights": [...] }` instead of a plain string (a plain
+  string means view-only). The UI hides actions the user is not allowed to
+  do, and the server enforces them independently (HTTP 403).
 - `smtp` — outgoing mail for password-reset e-mails (implicit TLS + AUTH
   LOGIN). For Gmail create an *app password* (Google account → Security →
   2-Step Verification → App passwords) — a normal account password will not
@@ -140,10 +153,12 @@ cp config.json.sample config.json
 | `?action=resetPassword` | POST `{token, password}` → sets a new password, token is single-use |
 | `?action=albums` | album list: id, title, counts, cover |
 | `?action=album&id=X` | album contents, generates missing thumbnails |
-| `?action=saveOrder&id=X` | POST an array of file names → writes `.order.json` |
+| `?action=saveOrder&id=X` | POST an array of file names → writes `.order.json` (needs the `move` right) |
+| `?action=delete&id=X` | POST `{name}` → deletes the file, its thumbnail and the `.order.json` entry (needs the `delete` right) |
 
-All data actions require authentication (HTTP 401 otherwise). Responses are
-sent with `Cache-Control: no-store`.
+All data actions require authentication (HTTP 401 otherwise); `saveOrder`
+and `delete` additionally require the respective permission (HTTP 403).
+Responses are sent with `Cache-Control: no-store`.
 
 ## nginx security — IMPORTANT
 

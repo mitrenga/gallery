@@ -4,6 +4,7 @@
 
 let DATA = null;
 let GALLERY_TITLE = 'Gallery';   // overridden by "title" from config.json (via whoami)
+let RIGHTS = [];                 // permissions of the signed-in user ("move", "delete")
 
 const content = document.getElementById('content');
 const breadcrumb = document.getElementById('breadcrumb');
@@ -36,6 +37,7 @@ async function init() {
       showLogin();
       return;
     }
+    RIGHTS = who.rights || [];
     updateLogoutButton(who.user);
   } catch (e) {
     content.innerHTML = '<p class="loading">Server is not responding (getData.php).</p>';
@@ -85,11 +87,12 @@ function showLogin() {
     const errEl = dlg.querySelector('.login-error');
     errEl.textContent = '';
     try {
-      await fetchJson('getData.php?action=login', {
+      const res = await fetchJson('getData.php?action=login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ user: form.user.value, password: form.password.value }),
       });
+      RIGHTS = res.rights || [];
       dlg.remove();
       updateLogoutButton(form.user.value);
       loadData();
@@ -288,24 +291,26 @@ function renderAlbum(album) {
       openLightbox(album, index);
     });
 
-    // drag & drop ordering
-    cell.draggable = true;
-    cell.addEventListener('dragstart', e => {
-      dragIndex = index;
-      cell.classList.add('dragging');
-      e.dataTransfer.effectAllowed = 'move';
-    });
-    cell.addEventListener('dragend', () => cell.classList.remove('dragging'));
-    cell.addEventListener('dragover', e => {
-      e.preventDefault();
-      e.dataTransfer.dropEffect = 'move';
-      cell.classList.add('drag-over');
-    });
-    cell.addEventListener('dragleave', () => cell.classList.remove('drag-over'));
-    cell.addEventListener('drop', e => {
-      e.preventDefault();
-      moveItem(album, dragIndex, index);
-    });
+    // drag & drop ordering – only with the "move" permission
+    if (RIGHTS.includes('move')) {
+      cell.draggable = true;
+      cell.addEventListener('dragstart', e => {
+        dragIndex = index;
+        cell.classList.add('dragging');
+        e.dataTransfer.effectAllowed = 'move';
+      });
+      cell.addEventListener('dragend', () => cell.classList.remove('dragging'));
+      cell.addEventListener('dragover', e => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        cell.classList.add('drag-over');
+      });
+      cell.addEventListener('dragleave', () => cell.classList.remove('drag-over'));
+      cell.addEventListener('drop', e => {
+        e.preventDefault();
+        moveItem(album, dragIndex, index);
+      });
+    }
 
     if (item.thumb) {
       cell.innerHTML = `<img src="${item.thumb}" alt="${item.name}" loading="lazy">`;
@@ -317,6 +322,21 @@ function renderAlbum(album) {
     }
 
     cell.innerHTML += `<span class="label">${item.name}</span>`;
+
+    // delete button – only with the "delete" permission
+    if (RIGHTS.includes('delete')) {
+      const del = document.createElement('button');
+      del.className = 'thumb-del';
+      del.title = 'Delete';
+      del.innerHTML = '&times;';
+      del.addEventListener('click', e => {
+        e.preventDefault();
+        e.stopPropagation();   // must not open the lightbox
+        deleteItem(album, index);
+      });
+      cell.appendChild(del);
+    }
+
     grid.appendChild(cell);
   });
 
@@ -350,6 +370,13 @@ function moveItem(album, from, to) {
   saveOrder(album);  // and persist it on the server
 }
 
+// short status message in the header that disappears by itself
+function flashStatus(msg) {
+  statusEl.textContent = msg;
+  clearTimeout(flashStatus.timer);
+  flashStatus.timer = setTimeout(() => { statusEl.textContent = ''; }, 2000);
+}
+
 async function saveOrder(album) {
   try {
     await fetchJson('getData.php?action=saveOrder&id=' + encodeURIComponent(album.id), {
@@ -357,12 +384,30 @@ async function saveOrder(album) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(album.items.map(i => i.name)),
     });
-    statusEl.textContent = 'Order saved';
+    flashStatus('Order saved');
   } catch (e) {
-    statusEl.textContent = 'Failed to save the order!';
+    flashStatus('Failed to save the order!');
   }
-  clearTimeout(saveOrder.timer);
-  saveOrder.timer = setTimeout(() => { statusEl.textContent = ''; }, 2000);
+}
+
+// ---- deleting a photo/video (the "delete" permission) ----
+async function deleteItem(album, index) {
+  const item = album.items[index];
+  if (!confirm(`Delete "${item.name}"? This cannot be undone.`)) return;
+  try {
+    await fetchJson('getData.php?action=delete&id=' + encodeURIComponent(album.id), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: item.name }),
+    });
+    album.items.splice(index, 1);
+    if (item.type === 'video') album.videos--; else album.photos--;
+    if (album.cover && album.cover.endsWith('/' + item.name + '.jpg')) album.cover = null;
+    flashStatus('Deleted');
+    render();
+  } catch (e) {
+    flashStatus('Failed to delete!');
+  }
 }
 
 // ---- lightbox (photo/video detail) ----

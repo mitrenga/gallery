@@ -1,7 +1,8 @@
 {
   "title": "My Gallery",
   "users": [
-    { "user": "name", "password": "change-me", "email": "user@sample.com" }
+    { "user": "name", "password": "change-me", "email": "user@sample.com", "rights": ["move", "delete"] },
+    { "user": "viewer", "password": "change-me", "email": "viewer@sample.com" }
   ],
   "smtp": {
     "host": "smtp.gmail.com",
@@ -13,6 +14,6 @@
   "autoLoginIps": [
     "127.0.0.1",
     "::1",
-    "192.168.1.0/24"
+    { "ip": "192.168.1.0/24", "rights": ["move"] }
   ]
 }

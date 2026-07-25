@@ -33,11 +33,22 @@ require __DIR__ . '/authLib.php';
 $config = is_file($CONFIG_FILE) ? json_decode(file_get_contents($CONFIG_FILE), true) : null;
 $user = resolveAuthUser($config);
 $authenticated = $user !== null;
+$rights = resolveRights($config, $user);
+
+// 403 unless the signed-in user has the given right ("move", "delete", …)
+function requireRight(array $rights, string $right): void {
+    if (!in_array($right, $rights, true)) {
+        http_response_code(403);
+        echo json_encode(['error' => "missing '$right' permission"]);
+        exit;
+    }
+}
 
 if ($action === 'whoami') {
     echo json_encode([
         'auth' => $authenticated,
         'user' => $_SESSION['user'] ?? null,
+        'rights' => $rights,
         'title' => $config['title'] ?? null,   // gallery name from config.json
     ]);
     exit;
@@ -51,7 +62,7 @@ if ($action === 'login') {
         if (hash_equals((string)$usr['user'], $u) && hash_equals((string)$usr['password'], $p)) {
             session_regenerate_id(true);
             $_SESSION['user'] = $u;
-            echo json_encode(['auth' => true, 'user' => $u]);
+            echo json_encode(['auth' => true, 'user' => $u, 'rights' => resolveRights($config, $u)]);
             exit;
         }
     }
@@ -281,6 +292,7 @@ if ($action === 'album') {
 
 // POST getData.php?action=saveOrder&id=001  (body: JSON array of file names)
 if ($action === 'saveOrder') {
+    requireRight($rights, 'move');
     $id = basename($_GET['id'] ?? '');
     $dir = "$SRC/$id";
     if ($id === '' || !is_dir($dir)) {
@@ -300,6 +312,47 @@ if ($action === 'saveOrder') {
     file_put_contents("$dir/.order.json",
         json_encode($names, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
     echo json_encode(['ok' => true, 'count' => count($names)]);
+    exit;
+}
+
+// POST getData.php?action=delete&id=001  (body: JSON {"name": "photo.jpg"})
+// removes the file, its thumbnail and the entry in .order.json
+if ($action === 'delete') {
+    requireRight($rights, 'delete');
+    $id = basename($_GET['id'] ?? '');
+    $dir = "$SRC/$id";
+    if ($id === '' || !is_dir($dir)) {
+        http_response_code(404);
+        echo json_encode(['error' => 'album not found']);
+        exit;
+    }
+    $body = json_decode(file_get_contents('php://input'), true) ?? [];
+    $name = (string)($body['name'] ?? '');
+    $ext = strtolower(pathinfo($name, PATHINFO_EXTENSION));
+    // only media files inside the album can be deleted (no paths, no dotfiles)
+    if ($name === '' || basename($name) !== $name || $name[0] === '.'
+            || !in_array($ext, array_merge($IMG_EXT, $VID_EXT)) || !is_file("$dir/$name")) {
+        http_response_code(404);
+        echo json_encode(['error' => 'file not found']);
+        exit;
+    }
+    if (!@unlink("$dir/$name")) {
+        http_response_code(500);
+        echo json_encode(['error' => 'could not delete the file (permissions?)']);
+        exit;
+    }
+    @unlink("$THUMBS/$id/$name.jpg");
+
+    $orderFile = "$dir/.order.json";
+    if (is_file($orderFile)) {
+        $order = json_decode(file_get_contents($orderFile), true);
+        if (is_array($order)) {
+            $order = array_values(array_filter($order, fn($n) => $n !== $name));
+            file_put_contents($orderFile,
+                json_encode($order, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+        }
+    }
+    echo json_encode(['ok' => true]);
     exit;
 }
 
