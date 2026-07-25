@@ -40,6 +40,7 @@ gallery/               application root (webroot or a webroot subdirectory)
 ├── auth.php           verification endpoint for nginx auth_request
 ├── authLib.php        shared authentication logic (session, IPs, users)
 ├── convert-mov.sh     converts .mov videos to browser-friendly .mp4
+├── fix-perms.sh       creates gallery/ and thumbs/ and sets ownership and permissions
 ├── config.json        users and allowed IPs (MUST NOT be committed to git!)
 ├── gallery/           albums – each subdirectory = one album
 │   └── 001/
@@ -204,14 +205,26 @@ include snippets/gallery-auth.conf;
 subdirectory), adjust the regex to `^/(?:gallery|thumbs)/` and point
 `SCRIPT_FILENAME` at the real path of `auth.php`.
 
-### 3. Filesystem permissions
+### 3. Filesystem permissions — fix-perms.sh
 
 PHP-FPM runs as `www-data` and needs **write** access to:
 - `thumbs/` — thumbnail generation
-- `gallery/` and the album directories — saving `.order.json`
+- `gallery/` and the album directories — saving `.order.json`, deleting photos
+- `config.json` — password reset rewrites it
 
-Simplest setup: `chmod 777 thumbs gallery gallery/*/`. Deleting
-server-generated thumbnails then requires sudo (`sudo rm -rf thumbs/*`).
+The `fix-perms.sh` script sets all of this up (and creates `gallery/` and
+`thumbs/` if missing): directories get `PROJECT-OWNER:www-data` with mode
+`2770` (setgid — new files inherit the group), files `660`. Nothing is
+world-accessible, which is stricter than a plain `chmod 777`:
+
+```bash
+sudo ./fix-perms.sh                      # processes the project next to the script
+sudo ./fix-perms.sh /path/to/project    # or any given project directory
+```
+
+Run it again after uploading new albums — files copied in by hand get the
+owner's default group and permissions, so the web server may not be able to
+read or delete them until the script fixes it.
 
 ## Security and functionality checklist
 
