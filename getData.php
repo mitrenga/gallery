@@ -177,6 +177,12 @@ if (!$authenticated) {
 // the session is read-only from here on – release the lock so parallel requests don't wait
 session_write_close();
 
+// filesystem path -> URL: every segment percent-encoded, otherwise "#" in an
+// album or file name would start a URL fragment and the browser would cut it off
+function urlPath(string ...$segments): string {
+    return implode('/', array_map('rawurlencode', $segments));
+}
+
 // album media files ordered by .order.json (new files go to the beginning)
 function mediaFiles(string $dir, array $imgExt, array $vidExt): array {
     $files = [];
@@ -239,8 +245,8 @@ if ($action === 'albums') {
                         makeVideoThumb("$dir/$f", $thumbAbs, $THUMB_SIZE);
                     }
                 }
-                if (is_file($thumbAbs)) $cover = $thumbRel;
-                elseif (!$isImg && $coverVideo === null) $coverVideo = "gallery/$d/$f";
+                if (is_file($thumbAbs)) $cover = urlPath('thumbs', $d, "$f.jpg");
+                elseif (!$isImg && $coverVideo === null) $coverVideo = urlPath('gallery', $d, $f);
             }
         }
 
@@ -281,8 +287,8 @@ if ($action === 'album') {
             makeVideoThumb($src, $thumbAbs, $THUMB_SIZE);
         }
 
-        $item = ['name' => $f, 'type' => $isImg ? 'image' : 'video', 'src' => "gallery/$id/$f"];
-        if (is_file($thumbAbs)) $item['thumb'] = $thumbRel;
+        $item = ['name' => $f, 'type' => $isImg ? 'image' : 'video', 'src' => urlPath('gallery', $id, $f)];
+        if (is_file($thumbAbs)) $item['thumb'] = urlPath('thumbs', $id, "$f.jpg");
         $items[] = $item;
     }
 
