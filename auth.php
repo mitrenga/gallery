@@ -1,6 +1,7 @@
 <?php
 // Internal endpoint for nginx auth_request – protects static gallery files
 // (photos and thumbnails). 204 = allow, 403 = deny.
+session_name('userSession');   // instead of the generic PHPSESSID (the domain is shared with other apps)
 session_start();
 require __DIR__ . '/authLib.php';
 

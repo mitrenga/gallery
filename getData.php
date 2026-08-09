@@ -5,6 +5,7 @@
 //   getData.php?action=logout        -> sign out
 //   getData.php?action=albums        -> album list
 //   getData.php?action=album&id=001  -> album contents (generates missing thumbnails)
+session_name('userSession');   // instead of the generic PHPSESSID (the domain is shared with other apps)
 session_start();
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store');   // responses must not be cached – data changes on disk
