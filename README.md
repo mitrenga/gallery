@@ -43,6 +43,7 @@ gallery/               application root (webroot or a webroot subdirectory)
 ├── authLib.php        shared authentication logic (session, IPs, users)
 ├── convert-mov.sh     converts .mov videos to browser-friendly .mp4
 ├── fix-perms.sh       creates gallery/ and thumbs/ and sets ownership and permissions
+├── nginx/             complete nginx server examples: root.conf (app alone in the web root), subdir.conf (several apps in subdirectories)
 ├── config.json        users and allowed IPs (MUST NOT be committed to git!)
 ├── gallery/           albums – each subdirectory = one album
 │   └── 001/
@@ -179,33 +180,34 @@ location ~ /config\.json$ { deny all; }
 ### 2. Protecting photos and thumbnails (auth_request)
 
 Static images are served directly by nginx — but before serving, a subrequest
-verifies the session against `auth.php`. Snippet
-`/etc/nginx/snippets/gallery-auth.conf`:
+verifies the session against `auth.php` (204 = allow, 403 = deny).
+
+Two complete, commented server blocks are in [nginx/](nginx/) — copy the one
+that matches the deployment, adjust `server_name`, `root`, certificates and the
+PHP-FPM socket, then `sudo nginx -t && sudo systemctl reload nginx`:
+
+| File | Deployment |
+|---|---|
+| [nginx/root.conf](nginx/root.conf) | the gallery alone in the web root – `https://photos.example.com/` |
+| [nginx/subdir.conf](nginx/subdir.conf) | several applications in subdirectories of one web root – `https://media.example.com/gallery/`, `/masky/` (a second gallery instance), `/music/` … (the same file exists in the music project; one server block covers all of them) |
+
+The rules that matter, in the subdirectory variant (`/gallery/`); every further
+instance gets its own copy with the directory name changed:
 
 ```nginx
-location ~ ^/gallery/(?:gallery|thumbs)/ {
-	auth_request /gallery-auth-check;
-}
-
-location = /gallery-auth-check {
+location ~ ^/gallery/(?:gallery|thumbs)/ { auth_request /auth-check-gallery; }
+location = /auth-check-gallery {
 	internal;
 	include fastcgi_params;
 	fastcgi_pass unix:/run/php/php-fpm.sock;
-	fastcgi_param SCRIPT_FILENAME /home/libmit/sw/gallery/auth.php;
+	fastcgi_param SCRIPT_FILENAME $document_root/gallery/auth.php;
 	fastcgi_pass_request_body off;
 	fastcgi_param CONTENT_LENGTH "";
 }
 ```
 
-Each server block then needs:
-
-```nginx
-include snippets/gallery-auth.conf;
-```
-
-**Production:** when the gallery sits in the web root (not in a `/gallery`
-subdirectory), adjust the regex to `^/(?:gallery|thumbs)/` and point
-`SCRIPT_FILENAME` at the real path of `auth.php`.
+(Installations that still use the former `snippets/gallery-auth.conf` keep
+working – the rules are identical, only kept in one file per server now.)
 
 ### 3. Filesystem permissions — fix-perms.sh
 
@@ -261,8 +263,8 @@ rm /tmp/gc
 ```
 
 Expected results: **403 / 401 / 403+403 / 200+200 / 200+200+200.**
-Anything else indicates an nginx config problem (missing deny rule, snippet
-not included, `systemctl reload nginx` not run) or wrong filesystem
+Anything else indicates an nginx config problem (missing deny rule, auth
+location missing, `systemctl reload nginx` not run) or wrong filesystem
 permissions.
 
 Quick thumbnail-generation check: delete one thumbnail
