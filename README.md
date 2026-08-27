@@ -24,7 +24,9 @@ everything is read directly from disk, thumbnails are generated on the fly.
   thumbnail and the `.order.json` entry (requires the `delete` permission)
 - **Fullscreen** — ⛶ button in the bottom right corner
 - **Login** — allowed IPs sign in automatically, everyone else via
-  username + password
+  username + password; a password login is remembered indefinitely by a
+  signed cookie renewed on every visit (invalidated by a password change or
+  sign-out)
 - **Permissions** — `move` and `delete` are granted per user or per
   auto-login IP in config.json; without a permission the UI hides the action
   and the server rejects it (HTTP 403)
