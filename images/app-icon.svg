@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" fill="none">
+  <title>Photo and Video Archive</title>
+  <desc>Application icon showing photos and a video symbol stored in an archive box.</desc>
+  <defs>
+    <linearGradient id="bg" x1="152" y1="104" x2="872" y2="920" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0EA5E9"/>
+      <stop offset="1" stop-color="#0F5FA8"/>
+    </linearGradient>
+    <linearGradient id="box" x1="292" y1="474" x2="724" y2="840" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#DBEAFE"/>
+    </linearGradient>
+    <linearGradient id="film" x1="340" y1="246" x2="700" y2="644" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FB7185"/>
+      <stop offset="1" stop-color="#F97316"/>
+    </linearGradient>
+    <linearGradient id="picture" x1="410" y1="342" x2="650" y2="520" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FEF3C7"/>
+      <stop offset="1" stop-color="#FDE68A"/>
+    </linearGradient>
+    <filter id="shadow" x="180" y="196" width="664" height="700" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="28" stdDeviation="32" flood-color="#083B72" flood-opacity=".34"/>
+    </filter>
+  </defs>
+
+  <rect width="1024" height="1024" fill="url(#bg)"/>
+  <circle cx="512" cy="426" r="254" fill="#FFFFFF" fill-opacity=".08"/>
+
+  <g filter="url(#shadow)">
+    <path d="M252 432C252 409.9 269.9 392 292 392H732C754.1 392 772 409.9 772 432V494H252V432Z" fill="#BAE6FD"/>
+    <path d="M304 464H720C742.1 464 760 481.9 760 504V796C760 829.1 733.1 856 700 856H324C290.9 856 264 829.1 264 796V504C264 481.9 281.9 464 304 464Z" fill="url(#box)"/>
+    <rect x="418" y="628" width="188" height="54" rx="27" fill="#0F5FA8"/>
+
+    <g transform="rotate(-6 530 430)">
+      <rect x="338" y="226" width="384" height="408" rx="34" fill="url(#film)" stroke="#075985" stroke-width="12"/>
+
+      <g fill="#FFF7ED">
+        <rect x="370" y="250" width="48" height="38" rx="9"/>
+        <rect x="438" y="250" width="48" height="38" rx="9"/>
+        <rect x="506" y="250" width="48" height="38" rx="9"/>
+        <rect x="574" y="250" width="48" height="38" rx="9"/>
+        <rect x="642" y="250" width="48" height="38" rx="9"/>
+        <rect x="370" y="572" width="48" height="38" rx="9"/>
+        <rect x="438" y="572" width="48" height="38" rx="9"/>
+        <rect x="506" y="572" width="48" height="38" rx="9"/>
+        <rect x="574" y="572" width="48" height="38" rx="9"/>
+        <rect x="642" y="572" width="48" height="38" rx="9"/>
+      </g>
+
+      <rect x="374" y="310" width="312" height="240" rx="22" fill="url(#picture)" stroke="#075985" stroke-width="10"/>
+      <circle cx="446" cy="376" r="34" fill="#F59E0B"/>
+      <path d="M390 526L482 416L548 482L594 432L670 526H390Z" fill="#22C55E"/>
+      <path d="M548 482L594 432L670 526H588L548 482Z" fill="#15803D"/>
+    </g>
+  </g>
+
+</svg>
