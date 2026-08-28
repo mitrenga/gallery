@@ -42,6 +42,7 @@ gallery/               application root (webroot or a webroot subdirectory)
 ├── auth.php           verification endpoint for nginx auth_request
 ├── authLib.php        shared authentication logic (session, IPs, users)
 ├── convert-mov.sh     converts .mov videos to browser-friendly .mp4
+├── convert-heic.sh    converts .heic photos (iPhone) to browser-friendly .jpg
 ├── fix-perms.sh       creates gallery/ and thumbs/ and sets ownership and permissions
 ├── nginx/             complete nginx server examples: root.conf (app alone in the web root), subdir.conf (several apps in subdirectories)
 ├── config.json        users and allowed IPs (MUST NOT be committed to git!)
@@ -92,6 +93,28 @@ What it does:
 - renames the entry in the album's `.order.json` (custom ordering survives)
   and deletes the stale `.mov` thumbnail
 - never overwrites an existing `.mp4` (reports SKIP); handles spaces in names
+
+## Converting .heic photos — convert-heic.sh
+
+iPhones save photos as HEIC, which browsers (Firefox, Chrome) do not display.
+`convert-heic.sh` converts all `.heic`/`.heif` files in the gallery to `.jpg`
+and **deletes the original on success**:
+
+```bash
+./convert-heic.sh                      # processes ./gallery next to the script
+./convert-heic.sh /path/to/gallery    # or any given directory
+```
+
+What it does:
+
+- uses ImageMagick (`magick`/`convert` with HEIC support) or `heif-convert`
+  (package `libheif-examples`), quality 92
+- applies the EXIF orientation so the `.jpg` and its thumbnail are upright
+- the original `.heic` is deleted only after a successful conversion; on
+  failure it is kept and the partial `.jpg` is removed
+- renames the entry in the album's `.order.json` (custom ordering survives)
+  and deletes the stale `.heic` thumbnail
+- never overwrites an existing `.jpg` (reports SKIP); handles spaces in names
 
 ## Configuration — config.json
 
