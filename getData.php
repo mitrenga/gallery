@@ -416,9 +416,81 @@ function makeImageThumb(string $src, string $dst, int $size): void {
 }
 
 function makeVideoThumb(string $src, string $dst, int $size): void {
+    // Work on a temporary file with a plain name and move it into place at the
+    // end: ffmpeg and convert both expand "%d" in an output file name.
+    $tmp = tempnam(sys_get_temp_dir(), 'gth');
+    if ($tmp === false) return;
+
+    // frame at 1 s; clips shorter than that produce nothing, so retry at the start
+    foreach ([1, 0] as $at) {
+        $cmd = sprintf(
+            'ffmpeg -y -loglevel error -ss %d -i %s -frames:v 1 -vf "scale=%d:%d:force_original_aspect_ratio=increase,crop=%d:%d" -q:v 4 -f image2 -c:v mjpeg %s 2>/dev/null',
+            $at, escapeshellarg($src), $size, $size, $size, $size, escapeshellarg($tmp)
+        );
+        exec($cmd);
+        clearstatcache(true, $tmp);
+        if (filesize($tmp) > 0) break;
+    }
+    // no frame at all, or an empty one (black / single colour – fade-in, leader,
+    // audio-only file): a preview showing nothing is replaced by the file name
+    if (filesize($tmp) === 0 || isEmptyThumb($tmp)) {
+        makeNameThumb(basename($src), $tmp, $size);
+        clearstatcache(true, $tmp);
+    }
+
+    if (filesize($tmp) > 0 && @rename($tmp, $dst)) {
+        @chmod($dst, 0664);   // tempnam() creates the file as 0600
+    } else {
+        @unlink($tmp);
+    }
+}
+
+// True when the picture carries no information: (nearly) one flat colour, or
+// almost black. Measured on the grayscale thumbnail, values in 0..1.
+function isEmptyThumb(string $file): bool {
+    $out = shell_exec(sprintf(
+        'convert %s -colorspace Gray -format "%%[fx:mean] %%[fx:standard_deviation]" info: 2>/dev/null',
+        escapeshellarg('jpg:' . $file)
+    ));
+    if (!preg_match('/^\s*([\d.eE+-]+)\s+([\d.eE+-]+)/', (string)$out, $m)) return false;
+    $mean = (float)$m[1];
+    $dev = (float)$m[2];
+    return $dev < 0.02 || ($mean < 0.03 && $dev < 0.05);
+}
+
+// Splits a file name into lines of at most $max characters, preferably
+// after a space, "_", "-" or "." (file names often have no spaces at all).
+function wrapName(string $name, int $max): array {
+    $chars = preg_split('//u', $name, -1, PREG_SPLIT_NO_EMPTY) ?: str_split($name);
+    $lines = [];
+    while (count($chars) > $max) {
+        $cut = $max;
+        for ($i = $max - 1; $i >= (int)($max / 2); $i--) {
+            if (in_array($chars[$i], [' ', '_', '-', '.'], true)) { $cut = $i + 1; break; }
+        }
+        $lines[] = trim(implode('', array_splice($chars, 0, $cut)));
+    }
+    $lines[] = trim(implode('', $chars));
+    return array_values(array_filter($lines, fn($l) => $l !== ''));
+}
+
+// Placeholder thumbnail: black background with the file name in a sans-serif
+// font; long names are wrapped and the font size is fitted to the box
+// automatically. $dst must not contain "%".
+function makeNameThumb(string $name, string $dst, int $size): void {
+    // the system default sans-serif (covers diacritics), DejaVu Sans as a fallback
+    $font = trim((string)shell_exec('fc-match -f "%{file}" sans-serif 2>/dev/null'));
+    if ($font === '' || !is_file($font)) $font = 'DejaVu-Sans';
+    // label: text is not literal – neutralise backslash and percent escapes and
+    // a leading "@", which would mean "read the text from this file"
+    $lines = wrapName($name, 18);
+    $text = str_replace(['\\', '%'], ['\\\\', '%%'], implode("\n", $lines));
+    if ($text !== '' && $text[0] === '@') $text = '\\' . $text;
+    $boxH = min($size - 40, (int)(count($lines) * $size * 0.13));
     $cmd = sprintf(
-        'ffmpeg -y -loglevel error -ss 1 -i %s -frames:v 1 -vf "scale=%d:%d:force_original_aspect_ratio=increase,crop=%d:%d" -q:v 4 %s 2>/dev/null',
-        escapeshellarg($src), $size, $size, $size, $size, escapeshellarg($dst)
+        'convert -background black -fill white -font %s -gravity center -size %dx%d %s -extent %dx%d -quality 82 %s 2>/dev/null',
+        escapeshellarg($font), $size - 40, $boxH, escapeshellarg('label:' . $text),
+        $size, $size, escapeshellarg('jpg:' . $dst)
     );
     exec($cmd);
 }

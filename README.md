@@ -72,6 +72,11 @@ gallery/               application root (webroot or a webroot subdirectory)
   each video, which is slower (metadata + part of the video is downloaded
   for every preview).
 
+  The thumbnail is the frame at 1 s (the first frame for shorter clips). When
+  that frame is empty — black or a single flat colour, or the file has no
+  video at all — the thumbnail is a black tile with the file name in the
+  system sans-serif font instead.
+
 ## Converting .mov videos — convert-mov.sh
 
 Browsers play `.mov` files unreliably (Firefox refuses the QuickTime
