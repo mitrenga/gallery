@@ -475,7 +475,7 @@ function wrapName(string $name, int $max): array {
 }
 
 // Placeholder thumbnail: black background with the file name in a sans-serif
-// font below the top edge; long names are wrapped and the font size is fitted
+// font at a quarter of the height; long names are wrapped and the font size is fitted
 // to the box automatically. $dst must not contain "%".
 function makeNameThumb(string $name, string $dst, int $size): void {
     // the system default sans-serif (covers diacritics), DejaVu Sans as a fallback
@@ -486,13 +486,13 @@ function makeNameThumb(string $name, string $dst, int $size): void {
     $lines = wrapName($name, 18);
     $text = str_replace(['\\', '%'], ['\\\\', '%%'], implode("\n", $lines));
     if ($text !== '' && $text[0] === '@') $text = '\\' . $text;
-    // the text sits in a band below the top edge: the centre of the tile is
+    // the text is centred at 25 % of the height: the centre of the tile is
     // covered by the play icon (52 px on a tile from 180 px wide, i.e. the
-    // middle ~30 % of the thumbnail)
-    $top = (int)($size * 0.06);
-    $boxH = min((int)($size * 0.27), (int)(count($lines) * $size * 0.11));
+    // middle ~30 % of the thumbnail), so the band may be at most 20 % high
+    $boxH = min((int)($size * 0.20), (int)(count($lines) * $size * 0.11));
+    $top = (int)($size * 0.25 - $boxH / 2);
     $cmd = sprintf(
-        'convert -background black -fill white -font %s -gravity North -size %dx%d %s -splice 0x%d -extent %dx%d -quality 82 %s 2>/dev/null',
+        'convert -background black -fill white -font %s -gravity center -size %dx%d %s -gravity North -splice 0x%d -extent %dx%d -quality 82 %s 2>/dev/null',
         escapeshellarg($font), $size - 40, $boxH, escapeshellarg('label:' . $text),
         $top, $size, $size, escapeshellarg('jpg:' . $dst)
     );
