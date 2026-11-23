@@ -421,19 +421,27 @@ function makeVideoThumb(string $src, string $dst, int $size): void {
     $tmp = tempnam(sys_get_temp_dir(), 'gth');
     if ($tmp === false) return;
 
-    // frame at 1 s; clips shorter than that produce nothing, so retry at the start
-    foreach ([1, 0] as $at) {
+    // Frame at 1 s (clips shorter than that produce nothing, so the first
+    // frame is taken instead). When it is empty (black / single colour –
+    // fade-in, leader), the frames at 30 s and 60 s are tried as well.
+    $grab = function (int $at) use ($src, $tmp, $size): bool {
         $cmd = sprintf(
             'ffmpeg -y -loglevel error -ss %d -i %s -frames:v 1 -vf "scale=%d:%d:force_original_aspect_ratio=increase,crop=%d:%d" -q:v 4 -f image2 -c:v mjpeg %s 2>/dev/null',
             $at, escapeshellarg($src), $size, $size, $size, $size, escapeshellarg($tmp)
         );
         exec($cmd);
         clearstatcache(true, $tmp);
-        if (filesize($tmp) > 0) break;
+        return filesize($tmp) > 0;   // nothing is written past the end of the video
+    };
+
+    $ok = ($grab(1) || $grab(0)) && !isEmptyThumb($tmp);
+    foreach ([30, 60] as $at) {
+        if ($ok) break;
+        $ok = $grab($at) && !isEmptyThumb($tmp);
     }
-    // no frame at all, or an empty one (black / single colour – fade-in, leader,
-    // audio-only file): a preview showing nothing is replaced by the file name
-    if (filesize($tmp) === 0 || isEmptyThumb($tmp)) {
+    // still nothing to show (or no video stream at all): a preview showing
+    // nothing is replaced by the file name
+    if (!$ok) {
         makeNameThumb(basename($src), $tmp, $size);
         clearstatcache(true, $tmp);
     }

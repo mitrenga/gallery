@@ -73,9 +73,10 @@ gallery/               application root (webroot or a webroot subdirectory)
   for every preview).
 
   The thumbnail is the frame at 1 s (the first frame for shorter clips). When
-  that frame is empty — black or a single flat colour, or the file has no
-  video at all — the thumbnail is a black tile with the file name in the
-  system sans-serif font instead.
+  that frame is empty — black or a single flat colour — the frames at 30 s
+  and 60 s are tried too. If all of them are empty, or the file has no video
+  at all, the thumbnail is a black tile with the file name in the system
+  sans-serif font instead.
 
 ## Converting .mov videos — convert-mov.sh
 
