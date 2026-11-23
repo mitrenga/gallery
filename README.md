@@ -21,7 +21,8 @@ everything is read directly from disk, thumbnails are generated on the fly.
 - **Drag & drop ordering** — drag a thumbnail with the mouse; the order is
   saved on the server (requires the `move` permission)
 - **Deleting photos/videos** — × button on a thumbnail removes the file, its
-  thumbnail and the `.order.json` entry (requires the `delete` permission)
+  thumbnail and the `.order.json` / `.thumbs.json` entries (requires the
+  `delete` permission)
 - **Fullscreen** — ⛶ button in the bottom right corner
 - **Login** — allowed IPs sign in automatically, everyone else via
   username + password; a password login is remembered indefinitely by a
@@ -52,7 +53,8 @@ gallery/               application root (webroot or a webroot subdirectory)
 │   └── 001/
 │       ├── *.jpg, *.mp4   photos and videos
 │       ├── .title         optional album title (directory name is used without it)
-│       └── .order.json    file order (created by drag & drop, can be written by hand)
+│       ├── .order.json    file order (created by drag & drop, can be written by hand)
+│       └── .thumbs.json   second of the video thumbnail frame (optional, written by hand)
 └── thumbs/            generated 400×400 thumbnails (reproducible, not in git)
 ```
 
@@ -77,6 +79,44 @@ gallery/               application root (webroot or a webroot subdirectory)
   and 60 s are tried too. If all of them are empty, or the file has no video
   at all, the thumbnail is a black tile with the file name in the system
   sans-serif font instead.
+
+  The second can be set by hand per album or per video, see
+  [Video thumbnail frame — .thumbs.json](#video-thumbnail-frame--thumbsjson).
+
+## Video thumbnail frame — .thumbs.json
+
+By default the frame for a video thumbnail is picked automatically (see
+[Requirements](#requirements)). To choose it yourself, put a `.thumbs.json`
+file into the album directory (next to `.order.json`):
+
+```json
+{
+  "default": 10,
+  "files": {
+    "wedding.mp4": 42.5,
+    "trip.mp4": 0
+  }
+}
+```
+
+- `default` — second used for every video of the album
+- `files` — second for a single video; wins over `default`
+- both keys are optional, seconds may be fractional; a video with no value
+  from either key keeps the automatic choice
+- a second set by hand is used as it is, even when the frame is dark — the
+  empty-frame test applies to the automatic choice only; when the second
+  lies past the end of the video, the automatic choice is used instead
+- the album cover on the overview uses the same frame
+
+The file is written by hand; the web server only needs to read it (it
+rewrites it just to drop the entry of a video deleted in the gallery).
+
+**When thumbnails are regenerated:** a video thumbnail is made again when it
+is missing, older than the video, or older than `.thumbs.json`. So after
+editing the file, all video thumbnails of that album are regenerated once,
+the next time the album (or the overview, for the cover) is opened. Deleting
+`.thumbs.json` does not regenerate anything by itself — remove the album's
+thumbnails (`thumbs/<album>/*.mp4.jpg`) to get the automatic frames back.
 
 ## Converting .mov videos — convert-mov.sh
 
@@ -240,7 +280,7 @@ cp config.json.sample config.json
 | `?action=albums` | album list: id, title, counts, cover |
 | `?action=album&id=X` | album contents, generates missing thumbnails |
 | `?action=saveOrder&id=X` | POST an array of file names → writes `.order.json` (needs the `move` right) |
-| `?action=delete&id=X` | POST `{name}` → deletes the file, its thumbnail and the `.order.json` entry (needs the `delete` right) |
+| `?action=delete&id=X` | POST `{name}` → deletes the file, its thumbnail and the `.order.json` and `.thumbs.json` entries (needs the `delete` right) |
 
 All data actions require authentication (HTTP 401 otherwise); `saveOrder`
 and `delete` additionally require the respective permission (HTTP 403).

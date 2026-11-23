@@ -243,10 +243,8 @@ if ($action === 'albums') {
                     if (!is_file($thumbAbs) || filemtime($thumbAbs) < filemtime("$dir/$f")) {
                         makeImageThumb("$dir/$f", $thumbAbs, $THUMB_SIZE);
                     }
-                } elseif ($hasFfmpeg) {
-                    if (!is_file($thumbAbs) || filemtime($thumbAbs) < filemtime("$dir/$f")) {
-                        makeVideoThumb("$dir/$f", $thumbAbs, $THUMB_SIZE);
-                    }
+                } elseif ($hasFfmpeg && videoThumbStale($thumbAbs, $dir, $f)) {
+                    makeVideoThumb("$dir/$f", $thumbAbs, $THUMB_SIZE, videoThumbAt($dir, $f));
                 }
                 if (is_file($thumbAbs)) $cover = urlPath('thumbs', $d, "$f.jpg");
                 elseif (!$isImg && $coverVideo === null) $coverVideo = urlPath('gallery', $d, $f);
@@ -286,8 +284,8 @@ if ($action === 'album') {
             if (!is_file($thumbAbs) || filemtime($thumbAbs) < filemtime($src)) {
                 makeImageThumb($src, $thumbAbs, $THUMB_SIZE);
             }
-        } elseif ($hasFfmpeg && (!is_file($thumbAbs) || filemtime($thumbAbs) < filemtime($src))) {
-            makeVideoThumb($src, $thumbAbs, $THUMB_SIZE);
+        } elseif ($hasFfmpeg && videoThumbStale($thumbAbs, $dir, $f)) {
+            makeVideoThumb($src, $thumbAbs, $THUMB_SIZE, videoThumbAt($dir, $f));
         }
 
         $item = ['name' => $f, 'type' => $isImg ? 'image' : 'video', 'src' => urlPath('gallery', $id, $f)];
@@ -361,6 +359,21 @@ if ($action === 'delete') {
                 json_encode($order, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
         }
     }
+
+    // drop the video's entry in .thumbs.json; the file keeps its mtime so that
+    // the remaining video thumbnails of the album are not regenerated
+    $thumbsFile = "$dir/.thumbs.json";
+    if (is_file($thumbsFile)) {
+        $conf = json_decode(file_get_contents($thumbsFile), true);
+        if (is_array($conf) && is_array($conf['files'] ?? null) && array_key_exists($name, $conf['files'])) {
+            $mtime = filemtime($thumbsFile);
+            unset($conf['files'][$name]);
+            if (!$conf['files']) $conf['files'] = new stdClass();   // keep "{}", not "[]"
+            file_put_contents($thumbsFile,
+                json_encode($conf, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+            @touch($thumbsFile, $mtime);
+        }
+    }
     echo json_encode(['ok' => true]);
     exit;
 }
@@ -415,7 +428,35 @@ function makeImageThumb(string $src, string $dst, int $size): void {
     exec($cmd);
 }
 
-function makeVideoThumb(string $src, string $dst, int $size): void {
+// Second of the video its thumbnail is taken from, set by hand in the album's
+// .thumbs.json:  { "default": 10, "files": { "clip.mp4": 42.5 } }
+// The entry of the file wins over the album default; null = nothing set,
+// the frame is picked automatically.
+function videoThumbAt(string $dir, string $f): ?float {
+    static $cache = [];
+    if (!array_key_exists($dir, $cache)) {
+        $file = "$dir/.thumbs.json";
+        $conf = is_file($file) ? json_decode(file_get_contents($file), true) : null;
+        $cache[$dir] = is_array($conf) ? $conf : [];
+    }
+    $conf = $cache[$dir];
+    $at = $conf['files'][$f] ?? $conf['default'] ?? null;
+    return is_int($at) || is_float($at) ? max(0.0, (float)$at) : null;
+}
+
+// True when the video thumbnail has to be (re)generated: it is missing, or
+// older than the video, or older than the album's .thumbs.json (after a
+// change there all video thumbnails of the album are made again).
+function videoThumbStale(string $thumb, string $dir, string $f): bool {
+    if (!is_file($thumb)) return true;
+    $t = filemtime($thumb);
+    if ($t < filemtime("$dir/$f")) return true;
+    $conf = "$dir/.thumbs.json";
+    return is_file($conf) && $t < filemtime($conf);
+}
+
+// $at = second set by hand (videoThumbAt), null = automatic choice
+function makeVideoThumb(string $src, string $dst, int $size, ?float $at = null): void {
     // Work on a temporary file with a plain name and move it into place at the
     // end: ffmpeg and convert both expand "%d" in an output file name.
     $tmp = tempnam(sys_get_temp_dir(), 'gth');
@@ -424,9 +465,9 @@ function makeVideoThumb(string $src, string $dst, int $size): void {
     // Frame at 1 s (clips shorter than that produce nothing, so the first
     // frame is taken instead). When it is empty (black / single colour –
     // fade-in, leader), the frames at 30 s and 60 s are tried as well.
-    $grab = function (int $at) use ($src, $tmp, $size): bool {
+    $grab = function (float $at) use ($src, $tmp, $size): bool {
         $cmd = sprintf(
-            'ffmpeg -y -loglevel error -ss %d -i %s -frames:v 1 -vf "scale=%d:%d:force_original_aspect_ratio=increase,crop=%d:%d" -q:v 4 -f image2 -c:v mjpeg %s 2>/dev/null',
+            'ffmpeg -y -loglevel error -ss %.3F -i %s -frames:v 1 -vf "scale=%d:%d:force_original_aspect_ratio=increase,crop=%d:%d" -q:v 4 -f image2 -c:v mjpeg %s 2>/dev/null',
             $at, escapeshellarg($src), $size, $size, $size, $size, escapeshellarg($tmp)
         );
         exec($cmd);
@@ -434,10 +475,15 @@ function makeVideoThumb(string $src, string $dst, int $size): void {
         return filesize($tmp) > 0;   // nothing is written past the end of the video
     };
 
-    $ok = ($grab(1) || $grab(0)) && !isEmptyThumb($tmp);
-    foreach ([30, 60] as $at) {
-        if ($ok) break;
-        $ok = $grab($at) && !isEmptyThumb($tmp);
+    // A second set by hand is taken as it is, even when the frame is dark;
+    // only when it lies past the end of the video the automatic choice follows.
+    $ok = $at !== null && $grab($at);
+    if (!$ok) {
+        $ok = ($grab(1) || $grab(0)) && !isEmptyThumb($tmp);
+        foreach ([30, 60] as $try) {
+            if ($ok) break;
+            $ok = $grab($try) && !isEmptyThumb($tmp);
+        }
     }
     // still nothing to show (or no video stream at all): a preview showing
     // nothing is replaced by the file name
