@@ -44,6 +44,7 @@ gallery/               application root (webroot or a webroot subdirectory)
 ├── convert-mov.sh     converts .mov videos to browser-friendly .mp4
 ├── convert-heic.sh    converts .heic photos (iPhone) to browser-friendly .jpg
 ├── convert-mpg.sh     converts .mpg/.mpeg videos (MPEG-1/2) to browser-friendly .mp4
+├── convert-avi.sh     converts .avi videos (MJPEG, DV, DivX/Xvid) to browser-friendly .mp4
 ├── fix-perms.sh       creates gallery/ and thumbs/ and sets ownership and permissions
 ├── nginx/             complete nginx server examples: root.conf (app alone in the web root), subdir.conf (several apps in subdirectories)
 ├── config.json        users and allowed IPs (MUST NOT be committed to git!)
@@ -139,6 +140,33 @@ What it does:
   failure it is kept and the partial `.mp4` is removed
 - renames the entry in the album's `.order.json` (custom ordering survives)
   and deletes the stale `.mpg` thumbnail
+- never overwrites an existing `.mp4` (reports SKIP); handles spaces in names
+
+## Converting .avi videos — convert-avi.sh
+
+Old digital cameras, DV camcorders and DivX/Xvid rips produce `.avi` files.
+AVI is only a container — inside is MJPEG, DV, MPEG-4 ASP, Cinepak… — and
+browsers play neither the container nor these codecs, so `convert-avi.sh`
+always re-encodes to H.264 + AAC and **deletes the original on success**:
+
+```bash
+./convert-avi.sh                      # processes ./gallery next to the script
+./convert-avi.sh /path/to/gallery    # or any given directory
+```
+
+What it does:
+
+- re-encodes video to H.264 (`crf 20`) and audio (pcm/adpcm/mp3/ac3) to AAC
+  160 kbit/s, with `+faststart` for smooth web streaming
+- interlaced material (typical for DV) is deinterlaced with `yadif`; AVI has
+  no field-order header, so when ffprobe reports it as unknown, the flag of
+  the first decoded frame decides
+- odd frame sizes are cropped by one pixel to even ones (required by H.264
+  4:2:0); presentation timestamps missing in AVI are generated
+- the original `.avi` is deleted only after a successful conversion; on
+  failure it is kept and the partial `.mp4` is removed
+- renames the entry in the album's `.order.json` (custom ordering survives)
+  and deletes the stale `.avi` thumbnail
 - never overwrites an existing `.mp4` (reports SKIP); handles spaces in names
 
 ## Configuration — config.json
