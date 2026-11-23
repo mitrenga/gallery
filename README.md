@@ -43,6 +43,7 @@ gallery/               application root (webroot or a webroot subdirectory)
 ├── authLib.php        shared authentication logic (session, IPs, users)
 ├── convert-mov.sh     converts .mov videos to browser-friendly .mp4
 ├── convert-heic.sh    converts .heic photos (iPhone) to browser-friendly .jpg
+├── convert-mpg.sh     converts .mpg/.mpeg videos (MPEG-1/2) to browser-friendly .mp4
 ├── fix-perms.sh       creates gallery/ and thumbs/ and sets ownership and permissions
 ├── nginx/             complete nginx server examples: root.conf (app alone in the web root), subdir.conf (several apps in subdirectories)
 ├── config.json        users and allowed IPs (MUST NOT be committed to git!)
@@ -115,6 +116,30 @@ What it does:
 - renames the entry in the album's `.order.json` (custom ordering survives)
   and deletes the stale `.heic` thumbnail
 - never overwrites an existing `.jpg` (reports SKIP); handles spaces in names
+
+## Converting .mpg videos — convert-mpg.sh
+
+Old camcorders, DVD rips and TV cards produce `.mpg`/`.mpeg` files
+(MPEG-1/MPEG-2 program streams). No browser plays MPEG-1/2 video, not even in
+an MP4 container, so `convert-mpg.sh` always re-encodes to H.264 + AAC and
+**deletes the original on success**:
+
+```bash
+./convert-mpg.sh                      # processes ./gallery next to the script
+./convert-mpg.sh /path/to/gallery    # or any given directory
+```
+
+What it does:
+
+- re-encodes video to H.264 (`crf 20`) and audio (mp2/ac3) to AAC 160 kbit/s,
+  with `+faststart` for smooth web streaming; DVD subtitle streams are dropped
+- interlaced material (field order reported by ffprobe) is deinterlaced with
+  `yadif`, so it does not show comb artefacts on a progressive screen
+- the original `.mpg` is deleted only after a successful conversion; on
+  failure it is kept and the partial `.mp4` is removed
+- renames the entry in the album's `.order.json` (custom ordering survives)
+  and deletes the stale `.mpg` thumbnail
+- never overwrites an existing `.mp4` (reports SKIP); handles spaces in names
 
 ## Configuration — config.json
 
