@@ -402,7 +402,9 @@ async function deleteItem(album, index) {
     });
     album.items.splice(index, 1);
     if (item.type === 'video') album.videos--; else album.photos--;
-    if (album.cover && album.cover.endsWith('/' + item.name + '.jpg')) album.cover = null;
+    // same thumbnail file? ("?v=…" differs when it was regenerated in between)
+    const noQuery = (url) => (url || '').split('?')[0];
+    if (album.cover && noQuery(album.cover) === noQuery(item.thumb)) album.cover = null;
     flashStatus('Deleted');
     render();
   } catch (e) {
