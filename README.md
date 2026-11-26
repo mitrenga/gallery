@@ -27,7 +27,8 @@ everything is read directly from disk, thumbnails are generated on the fly.
 - **Login** — allowed IPs sign in automatically, everyone else via
   username + password; a password login is remembered indefinitely by a
   signed cookie renewed on every visit (invalidated by a password change or
-  sign-out)
+  sign-out); passwords are stored hashed and can be kept in one file shared
+  by several installs (`sharedPasswords`)
 - **Permissions** — `move` and `delete` are granted per user or per
   auto-login IP in config.json; without a permission the UI hides the action
   and the server rejects it (HTTP 403)
@@ -41,7 +42,7 @@ gallery/               application root (webroot or a webroot subdirectory)
 ├── style.css          styling + transition animations
 ├── getData.php        API (album list, album contents, login, order saving)
 ├── auth.php           verification endpoint for nginx auth_request
-├── authLib.php        shared authentication logic (session, IPs, users)
+├── authLib.php        shared authentication logic (session, IPs, users, passwords)
 ├── convert-mov.sh     converts .mov videos to browser-friendly .mp4
 ├── convert-heic.sh    converts .heic photos (iPhone) to browser-friendly .jpg
 ├── convert-mpg.sh     converts .mpg/.mpeg videos (MPEG-1/2) to browser-friendly .mp4
@@ -266,7 +267,45 @@ cp config.json.sample config.json
   locking yourself out)
 - Password reset rewrites config.json, so the file must be **writable by the
   web-server user** (e.g. `chgrp www-data config.json`); otherwise resetting
-  fails with HTTP 500 while everything else keeps working
+  fails with HTTP 500 while everything else keeps working. Passwords are
+  stored as `password_hash()` values: a plain-text password written by hand
+  works and is replaced by its hash on the first successful sign-in (when
+  the file is writable)
+
+### Shared passwords — sharedPasswords
+
+Several installs on one server (family photos, other photos, a music
+archive, …) can share one password per user. Add the path of a common
+password file to the `config.json` of each install:
+
+```json
+{ "sharedPasswords": "/etc/media/passwords.json", "users": [ { "user": "name", "rights": ["move"] } ] }
+```
+
+```json
+{
+  "name":   { "password": "change-me" },
+  "viewer": { "password": "change-me" }
+}
+```
+
+- `config.json` still decides **who** may sign in to this install and with
+  what rights; the shared file only holds the password. `password` keys in
+  `config.json` are ignored once `sharedPasswords` is set — remove them
+- a password may be written by hand in plain text; it is replaced by its
+  hash on the first successful sign-in. Password reset writes the hash to
+  the shared file, so the new password applies to all installs at once (and
+  signs the user out of all of them); a user who has no entry in the file yet
+  gets one by a reset
+- a user missing in the file, or a missing/unreadable file, means password
+  sign-in is refused (IP auto-login keeps working) — it never falls back to
+  "authentication disabled"
+- keep the file **outside the web root** (absolute path). A relative path is
+  taken from the application directory, so a symlink inside the project works
+  too — then deny it in nginx like `config.json`
+- the file must exist and be **writable by the web-server user**
+  (`OWNER:www-data`, 660 — `fix-perms.sh` sets it); `config.json` then no
+  longer needs to be writable
 
 ## API (getData.php)
 
@@ -298,6 +337,10 @@ The password file lives inside the webroot; nginx must refuse to serve it:
 ```nginx
 location ~ /config\.json$ { deny all; }
 ```
+
+A shared password file (`sharedPasswords`) belongs outside the web root. If
+it is reachable inside it (e.g. through a symlink in the project), add the
+same rule for its name.
 
 ### 2. Protecting photos and thumbnails (auth_request)
 
@@ -336,7 +379,11 @@ working – the rules are identical, only kept in one file per server now.)
 PHP-FPM runs as `www-data` and needs **write** access to:
 - `thumbs/` — thumbnail generation
 - `gallery/` and the album directories — saving `.order.json`, deleting photos
-- `config.json` — password reset rewrites it
+- `config.json` — password reset rewrites it (and the first sign-in with a
+  plain-text password replaces it by its hash)
+- the `sharedPasswords` file, when `config.json` names one — it then holds
+  the passwords instead of `config.json`; the script sets its group and mode
+  and leaves the owner alone (the file belongs to several installs)
 
 The `fix-perms.sh` script sets all of this up (and creates `gallery/` and
 `thumbs/` if missing): directories get `PROJECT-OWNER:www-data` with mode
